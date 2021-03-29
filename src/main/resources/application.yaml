@@ -1,0 +1,9 @@
+## Server
+server:
+  port: 8081
+  error:
+    whitelabel:
+      enabled: false
+
+compile:
+  storage-directory: src/main/resources/classes/
