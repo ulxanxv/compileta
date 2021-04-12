@@ -2,13 +2,10 @@ package ru.dexterity.compileta.api.domain;
 
 public class CompilationInfo {
 
-    private String className;
-    private String testClassName;
-    private String methodName;
     private String code;
+    private String className;
     private String testCode;
-    private String solutionCode;
-    private String solutionMethodName;
+    private String testClassName;
 
     public String getClassName() {
         return className;
@@ -24,14 +21,6 @@ public class CompilationInfo {
 
     public void setTestClassName(String testClassName) {
         this.testClassName = testClassName;
-    }
-
-    public String getMethodName() {
-        return methodName;
-    }
-
-    public void setMethodName(String methodName) {
-        this.methodName = methodName;
     }
 
     public String getCode() {
@@ -50,19 +39,4 @@ public class CompilationInfo {
         this.testCode = testCode;
     }
 
-    public String getSolutionCode() {
-        return solutionCode;
-    }
-
-    public void setSolutionCode(String solutionCode) {
-        this.solutionCode = solutionCode;
-    }
-
-    public String getSolutionMethodName() {
-        return solutionMethodName;
-    }
-
-    public void setSolutionMethodName(String solutionMethodName) {
-        this.solutionMethodName = solutionMethodName;
-    }
 }

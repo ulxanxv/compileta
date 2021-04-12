@@ -2,7 +2,7 @@ package ru.dexterity.compileta.api;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import ru.dexterity.compileta.api.domain.CompilationInfo;
@@ -14,7 +14,7 @@ public class CompileController {
 
     private final CompileComponent compileComponent;
 
-    @GetMapping("/compile")
+    @PostMapping("/compile")
     public ResponseEntity<CompileResponse> compile(@RequestBody CompilationInfo compilationInfo)  {
         try {
             compileComponent.compileAndTest(compilationInfo);
