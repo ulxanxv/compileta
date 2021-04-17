@@ -1,6 +1,5 @@
 package ru.dexterity.compileta.util;
 
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -8,18 +7,14 @@ import org.springframework.web.context.annotation.RequestScope;
 import ru.dexterity.compileta.api.domain.CompilationInfo;
 import ru.dexterity.compileta.exceptions.CompilationErrorException;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.PrintStream;
+import java.lang.ProcessHandle.Info;
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.Properties;
 
 @Slf4j
 @Component
@@ -50,8 +45,9 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
         try {
             byte[] classByteCode = this.classToByteArray(className, directoryName);
             return this.defineClass(className, classByteCode, 0, classByteCode.length);
-        } catch (Exception e) {
-            throw new CompilationErrorException(className + ": compilation_failed");
+        } catch (IOException | ClassFormatError e) {
+            String message = e.getMessage();
+            throw new CompilationErrorException(String.format("class %s not found", className));
         }
     }
 
@@ -71,7 +67,9 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
 
         long length = compiledClass.length();
 
-        if (length > Integer.MAX_VALUE) { throw new CompilationErrorException(className + ": class is too large"); }
+        if (length > Integer.MAX_VALUE) {
+            throw new CompilationErrorException(String.format("%s class is too large", className));
+        }
 
         byte[] bytes = new byte[(int) length];
 
@@ -81,7 +79,9 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
             offset += numRead;
         }
 
-        if (offset < bytes.length) { throw new CompilationErrorException(className + ": not all bytes have been read"); }
+        if (offset < bytes.length) {
+            throw new CompilationErrorException(String.format("In %s class not all bytes have been read", className));
+        }
 
         inputStream.close();
         return bytes;
@@ -108,6 +108,13 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
 
         try {
             process.waitFor();
+
+            if (process.exitValue() == 1) {
+                throw new CompilationErrorException("check main method name");
+            }
+
+            Info info = process.info();
+            log.error(String.valueOf(info.totalCpuDuration().get().toMillis()));
         } catch (InterruptedException e) { log.info(e.toString()); }
 
         process.destroy();
