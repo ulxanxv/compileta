@@ -1,5 +1,7 @@
 package ru.dexterity.compileta.api;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,23 +20,19 @@ public class CompileController {
     public ResponseEntity<CompileResponse> compile(@RequestBody CompilationInfo compilationInfo)  {
         try {
             compileComponent.compileAndTest(compilationInfo);
-            return ResponseEntity.ok(new CompileResponse("tests_passed"));
+            return ResponseEntity.ok(new CompileResponse("ok", "tests_passed"));
         } catch (CompilationErrorException e) {
-            return ResponseEntity.ok(new CompileResponse(e.getMessage()));
+            return ResponseEntity.ok(new CompileResponse("error", e.getMessage()));
         }
     }
 
+    @Getter
+    @AllArgsConstructor
     public static class CompileResponse {
 
+        private final String status;
         private final String message;
 
-        public CompileResponse(String message) {
-            this.message = message;
-        }
-
-        public String getMessage() {
-            return message;
-        }
     }
 
 }

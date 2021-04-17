@@ -39,13 +39,15 @@ public class CompileComponent {
         Class<?> testClass = loaderComponent.findClass(compilationInfo.getTestClassName(), directoryName);
 
         Method[] declaredMethods = testClass.getDeclaredMethods();
-        for (Method method : declaredMethods) {
-          try {
-              method.invoke(testClass.getConstructor().newInstance());
-          } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException | InstantiationException e) {
-              loaderComponent.deleteFiles(new File(classesDirectory + directoryName));
-              throw new CompilationErrorException("tests_failed");
-          }
+
+        try {
+            Object testInstance = testClass.getConstructor().newInstance();
+            for (Method method : declaredMethods) {
+                method.invoke(testInstance);
+            }
+        } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException | InstantiationException e) {
+            loaderComponent.deleteFiles(new File(classesDirectory + directoryName));
+            throw new CompilationErrorException(e.getCause().getMessage());
         }
 
         // Удаление файлов после компиляции и тестирования
