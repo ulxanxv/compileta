@@ -12,7 +12,6 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.ProcessHandle.Info;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -112,9 +111,6 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
             if (process.exitValue() == 1) {
                 throw new CompilationErrorException("check main method name");
             }
-
-            Info info = process.info();
-            log.error(String.valueOf(info.totalCpuDuration().get().toMillis()));
         } catch (InterruptedException e) { log.info(e.toString()); }
 
         process.destroy();

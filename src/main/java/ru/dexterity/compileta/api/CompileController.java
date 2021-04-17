@@ -20,7 +20,7 @@ public class CompileController {
     public ResponseEntity<CompileResponse> compile(@RequestBody CompilationInfo compilationInfo)  {
         try {
             compileComponent.compileAndTest(compilationInfo);
-            return ResponseEntity.ok(new CompileResponse("ok", "tests_passed"));
+            return ResponseEntity.ok(new CompileResponse("ok", "tests passed"));
         } catch (CompilationErrorException e) {
             return ResponseEntity.ok(new CompileResponse("error", e.getMessage()));
         }

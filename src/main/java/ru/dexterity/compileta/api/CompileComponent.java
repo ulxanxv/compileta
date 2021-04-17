@@ -31,7 +31,7 @@ public class CompileComponent {
             loaderComponent.compileClasses(compilationInfo, directoryName);
         } catch (IOException e) {
             loaderComponent.deleteFiles(new File(classesDirectory + directoryName));
-            throw new CompilationErrorException("compilation_error");
+            throw new CompilationErrorException("compilation error");
         }
 
         // Вызов всех методов тест класса
