@@ -44,9 +44,8 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
         try {
             byte[] classByteCode = this.classToByteArray(className, directoryName);
             return this.defineClass(className, classByteCode, 0, classByteCode.length);
-        } catch (IOException | ClassFormatError e) {
-            String message = e.getMessage();
-            throw new CompilationErrorException(String.format("class %s not found", className));
+        } catch (IOException | ClassFormatError ignored) {
+            throw new CompilationErrorException(String.format("класс %s не найден", className));
         }
     }
 
@@ -67,7 +66,7 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
         long length = compiledClass.length();
 
         if (length > Integer.MAX_VALUE) {
-            throw new CompilationErrorException(String.format("%s class is too large", className));
+            throw new CompilationErrorException(String.format("класс %s очень большой", className));
         }
 
         byte[] bytes = new byte[(int) length];
@@ -79,7 +78,7 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
         }
 
         if (offset < bytes.length) {
-            throw new CompilationErrorException(String.format("In %s class not all bytes have been read", className));
+            throw new CompilationErrorException(String.format("в класс %s не все байты прочитаны", className));
         }
 
         inputStream.close();
@@ -109,7 +108,7 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
             process.waitFor();
 
             if (process.exitValue() == 1) {
-                throw new CompilationErrorException("check main method name");
+                throw new CompilationErrorException("не удалось скомпилировать, проверьте синтаксис или название главного метода/класса");
             }
         } catch (InterruptedException e) { log.info(e.toString()); }
 
