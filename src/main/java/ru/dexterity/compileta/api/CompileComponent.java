@@ -1,5 +1,6 @@
 package ru.dexterity.compileta.api;
 
+import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,8 +19,12 @@ import java.util.UUID;
 @Component
 public class CompileComponent {
 
+    private final CompiletaClassLoaderComponent loaderComponent;
+
     @Autowired
-    private CompiletaClassLoaderComponent loaderComponent;
+    public CompileComponent(CompiletaClassLoaderComponent loaderComponent) {
+        this.loaderComponent = loaderComponent;
+    }
 
     @Value("${compile.storage-directory}")
     private String classesDirectory;
@@ -29,9 +34,9 @@ public class CompileComponent {
 
         try {
             loaderComponent.compileClasses(compilationInfo, directoryName);
-        } catch (IOException e) {
+        } catch (IOException | CompilationErrorException e) {
             loaderComponent.deleteFiles(new File(classesDirectory + directoryName));
-            throw new CompilationErrorException("compilation error");
+            throw new CompilationErrorException(e.getMessage());
         }
 
         // Вызов всех методов тест класса
