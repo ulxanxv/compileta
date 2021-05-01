@@ -59,12 +59,11 @@ public class CompileComponent {
                     }
                 }).get(10, TimeUnit.SECONDS);
             }
-        } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException | InstantiationException e) {
-            throw new CompilationErrorException(e.getCause().getMessage());
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+        } catch (Exception e) {
             if (e instanceof TimeoutException) {
                 throw new CompilationErrorException("защита от бесконечного выполнения");
             }
+
             throw new CompilationErrorException(e.getCause().getMessage());
         } finally {
             loaderComponent.deleteFiles(new File(classesDirectory + directoryName));
