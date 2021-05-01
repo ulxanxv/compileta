@@ -57,7 +57,7 @@ public class CompileComponent {
                     try {
                         return method.invoke(testInstance);
                     } catch (IllegalAccessException | InvocationTargetException e) {
-                        return e.getMessage();
+                        throw new CompilationErrorException(e.getCause().getMessage());
                     }
                 }).get(10, TimeUnit.SECONDS);
             }
