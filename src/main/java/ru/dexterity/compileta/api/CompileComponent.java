@@ -64,7 +64,10 @@ public class CompileComponent {
         } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException | InstantiationException e) {
             throw new CompilationErrorException(e.getCause().getMessage());
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            throw new CompilationErrorException("защита от бесконечного выполнения");
+            if (e instanceof TimeoutException) {
+                throw new CompilationErrorException("защита от бесконечного выполнения");
+            }
+            throw new CompilationErrorException(e.getCause().getMessage());
         } finally {
             loaderComponent.deleteFiles(new File(classesDirectory + directoryName));
         }
