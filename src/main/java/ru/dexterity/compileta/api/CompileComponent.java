@@ -14,6 +14,11 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 @Slf4j
 @Component
@@ -48,11 +53,20 @@ public class CompileComponent {
         try {
             Object testInstance = testClass.getConstructor().newInstance();
             for (Method method : declaredMethods) {
-                method.invoke(testInstance);
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return method.invoke(testInstance);
+                    } catch (IllegalAccessException | InvocationTargetException e) {
+                        return e.getMessage();
+                    }
+                }).get(10, TimeUnit.SECONDS);
             }
         } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException | InstantiationException e) {
-            loaderComponent.deleteFiles(new File(classesDirectory + directoryName));
             throw new CompilationErrorException(e.getCause().getMessage());
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            throw new CompilationErrorException("защита от бесконечного выполнения");
+        } finally {
+            loaderComponent.deleteFiles(new File(classesDirectory + directoryName));
         }
 
         // Удаление файлов после компиляции и тестирования
