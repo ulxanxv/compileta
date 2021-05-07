@@ -43,16 +43,16 @@ public class CompileController {
         private String message;
 
         @JsonInclude(Include.NON_NULL)
-        private Double brevity;
+        private int brevity;
 
         @JsonInclude(Include.NON_NULL)
-        private Double rapidity;
+        private double rapidity;
 
         @JsonInclude(Include.NON_NULL)
-        private Double resourceConsumption;
+        private double resourceConsumption;
 
         @JsonInclude(Include.NON_NULL)
-        private Double totalScore;
+        private double totalScore;
 
     }
 

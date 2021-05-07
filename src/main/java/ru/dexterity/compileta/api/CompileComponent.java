@@ -1,6 +1,8 @@
 package ru.dexterity.compileta.api;
 
 import lombok.extern.slf4j.Slf4j;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.util.TraceClassVisitor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -10,7 +12,11 @@ import ru.dexterity.compileta.exceptions.CompilationErrorException;
 import ru.dexterity.compileta.util.CompiletaClassLoaderComponent;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -45,7 +51,9 @@ public class CompileComponent {
         // Поиск скомпилированного класса и тестирование
         Class<?> mainClass  = this.findClass(compilationInfo.getClassName(), directoryName); // TODO need to count brevity and resourceConsumption
         Class<?> testClass  = this.findClass(compilationInfo.getTestClassName(), directoryName);
+
         double averageSpeed = this.testSolution(testClass, directoryName);
+        int brevity         = this.countBrevity(compilationInfo.getClassName(), directoryName);
 
         loaderComponent.deleteFiles(
             new File(classesDirectory + directoryName)
@@ -55,10 +63,33 @@ public class CompileComponent {
             .status("ok")
             .message("tests passed")
             .rapidity(averageSpeed)
-            // .brevity()                   // TODO need filling
+            .brevity(brevity)
             //. resourceConsumption()       // TODO need filling
             // .totalScore()                // TODO need filling after count all metrics
             .build();
+    }
+
+    private int countBrevity(String className, String directoryName) {
+        ClassReader classReader;
+
+        try {
+            classReader = new ClassReader(
+                new FileInputStream(classesDirectory + directoryName + className + ".class")
+            );
+        } catch (IOException ignored) {
+            return 0;
+        }
+
+        StringWriter classContent       = new StringWriter();
+        TraceClassVisitor classVisitor  = new TraceClassVisitor(new PrintWriter(classContent));
+
+        classReader.accept(classVisitor, 0);
+
+        return classContent.toString()
+            .replaceAll("//.*|(\\\"(?:\\\\\\\\[^\\\"]|\\\\\\\\\\\"|.)*?\\\")|(?s)/\\\\*.*?\\\\*/", "")
+            .replaceAll("\\n", "")
+            .replaceAll(" ", "")
+            .length();
     }
 
     /**

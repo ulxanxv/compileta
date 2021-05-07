@@ -60,7 +60,10 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
     }
 
     private byte[] classToByteArray(String className, String directoryName) throws IOException {
-        File compiledClass = new File(classesDirectory + directoryName + className + ".class");
+        File compiledClass = new File(
+            classesDirectory + directoryName + className + ".class"
+        );
+
         InputStream inputStream = new FileInputStream(compiledClass);
 
         long length = compiledClass.length();
