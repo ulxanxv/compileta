@@ -1,6 +1,10 @@
 package ru.dexterity.compileta.api;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,19 +23,36 @@ public class CompileController {
     @PostMapping("/compile")
     public ResponseEntity<CompileResponse> compile(@RequestBody CompilationInfo compilationInfo)  {
         try {
-            compileComponent.compileAndTest(compilationInfo);
-            return ResponseEntity.ok(new CompileResponse("ok", "tests passed"));
+            CompileResponse run = compileComponent.run(compilationInfo);
+            return ResponseEntity.ok(run);
         } catch (CompilationErrorException e) {
-            return ResponseEntity.ok(new CompileResponse("error", e.getMessage()));
+            return ResponseEntity.ok(
+                CompileResponse.builder()
+                    .status("error")
+                    .message(e.getMessage())
+                    .build()
+            );
         }
     }
 
-    @Getter
-    @AllArgsConstructor
+    @Data
+    @Builder
     public static class CompileResponse {
 
-        private final String status;
-        private final String message;
+        private String status;
+        private String message;
+
+        @JsonInclude(Include.NON_NULL)
+        private Double brevity;
+
+        @JsonInclude(Include.NON_NULL)
+        private Double rapidity;
+
+        @JsonInclude(Include.NON_NULL)
+        private Double resourceConsumption;
+
+        @JsonInclude(Include.NON_NULL)
+        private Double totalScore;
 
     }
 
