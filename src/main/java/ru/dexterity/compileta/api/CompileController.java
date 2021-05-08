@@ -49,9 +49,6 @@ public class CompileController {
         private double rapidity;
 
         @JsonInclude(Include.NON_NULL)
-        private double resourceConsumption;
-
-        @JsonInclude(Include.NON_NULL)
         private double totalScore;
 
     }

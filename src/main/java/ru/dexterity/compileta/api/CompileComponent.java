@@ -14,7 +14,6 @@ import ru.dexterity.compileta.util.CompiletaClassLoaderComponent;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
@@ -64,8 +63,7 @@ public class CompileComponent {
             .message("tests passed")
             .rapidity(averageSpeed)
             .brevity(brevity)
-            //. resourceConsumption()       // TODO need filling
-            // .totalScore()                // TODO need filling after count all metrics
+            // .totalScore() //FIXME
             .build();
     }
 
@@ -105,6 +103,7 @@ public class CompileComponent {
                 CompletableFuture.runAsync(() -> {
                     try {
                         long executionSpeed = System.nanoTime();
+
                         method.invoke(testInstance);
                         executionSpeedEachMethod.add(System.nanoTime() - executionSpeed);
                     } catch (IllegalAccessException | InvocationTargetException e) {
