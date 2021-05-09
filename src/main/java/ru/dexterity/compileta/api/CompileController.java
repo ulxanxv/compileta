@@ -1,19 +1,15 @@
 package ru.dexterity.compileta.api;
 
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import ru.dexterity.compileta.api.domain.CompilationInfo;
 import ru.dexterity.compileta.api.domain.CompileResponse;
 import ru.dexterity.compileta.api.domain.TaskOwner;
 import ru.dexterity.compileta.api.domain.UpdateTableResponse;
-import ru.dexterity.compileta.config.TaskOwnerKeyDeserializer;
 import ru.dexterity.compileta.exceptions.CompilationErrorException;
 
 import java.util.Map;

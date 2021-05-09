@@ -5,7 +5,9 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.util.TraceClassVisitor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.util.FileSystemUtils;
 import ru.dexterity.compileta.api.domain.CompilationInfo;
 import ru.dexterity.compileta.api.domain.CompileResponse;
 import ru.dexterity.compileta.api.domain.TaskOwner;
@@ -20,6 +22,8 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -33,16 +37,7 @@ import java.util.concurrent.TimeoutException;
 @Component
 public class CompileComponent {
 
-    private final CompiletaClassLoaderComponent loaderComponent;
-
-    @Autowired
-    public CompileComponent(CompiletaClassLoaderComponent loaderComponent) {
-        this.loaderComponent = loaderComponent;
-    }
-
-    @Value("${compile.storage-directory}")
-    private String classesDirectory;
-
+    public static final String CLASSES_DIRECTORY = "src/main/resources/classes/";
 
     public UpdateTableResponse runAll(Map<TaskOwner, CompilationInfo> compilationList) {
         Map<TaskOwner, CompileResponse> responseMap = new HashMap<>();
@@ -62,19 +57,21 @@ public class CompileComponent {
         final String directoryName =
             UUID.randomUUID().toString().concat("/");
 
+        final CompiletaClassLoaderComponent loaderComponent =
+            new CompiletaClassLoaderComponent();
+
         // Компиляция основного класса и тестового
-        this.compileClasses(compilationInfo, directoryName);
+        this.compileClasses(loaderComponent, compilationInfo, directoryName);
 
         // Загрузка скомпилированных классов
-        Class<?> mainClass  = this.findClass(compilationInfo.getClassName(), directoryName);
-        Class<?> testClass  = this.findClass(compilationInfo.getTestClassName(), directoryName);
+        Class<?> mainClass  = this.findClass(loaderComponent, compilationInfo.getClassName(), directoryName);
+        Class<?> testClass  = this.findClass(loaderComponent, compilationInfo.getTestClassName(), directoryName);
 
         int userBrevity         = this.countBrevity(compilationInfo.getClassName(), directoryName);
         double userAverageSpeed = this.testSolution(testClass, directoryName);
 
-        loaderComponent.deleteFiles(
-            new File(classesDirectory + directoryName)
-        );
+        System.gc();
+        this.deleteFiles(Paths.get(CLASSES_DIRECTORY + directoryName));
 
         return CompileResponse.builder()
             .status("ok")
@@ -91,7 +88,7 @@ public class CompileComponent {
 
         try {
             classReader = new ClassReader(
-                new FileInputStream(classesDirectory + directoryName + className + ".class")
+                new FileInputStream(CLASSES_DIRECTORY + directoryName + className + ".class")
             );
         } catch (IOException ignored) {
             return 0;
@@ -132,10 +129,13 @@ public class CompileComponent {
                 }).get(10, TimeUnit.SECONDS);
             }
         } catch (Exception e) {
-            if (e instanceof TimeoutException)
-                throw new CompilationErrorException("Защита от долгого выполнения (более 10 секунд)");
+            if (e instanceof TimeoutException) {
+                this.deleteFiles(Paths.get(CLASSES_DIRECTORY + directoryName));
+                throw
+                    new CompilationErrorException("Защита от долгого выполнения (более 10 секунд)");
+            }
 
-            loaderComponent.deleteFiles(new File(classesDirectory + directoryName));
+            this.deleteFiles(Paths.get(CLASSES_DIRECTORY + directoryName));
             throw
                 new CompilationErrorException(e.getCause().getMessage());
         }
@@ -146,17 +146,25 @@ public class CompileComponent {
             .orElse(Double.NaN);
     }
 
-    private void compileClasses(CompilationInfo compilationInfo, String directoryName) {
+    private void compileClasses(CompiletaClassLoaderComponent loaderComponent, CompilationInfo compilationInfo, String directoryName) {
         try {
             loaderComponent.compileClasses(compilationInfo, directoryName);
         } catch (IOException | CompilationErrorException e) {
-            loaderComponent.deleteFiles(new File(classesDirectory + directoryName));
+            this.deleteFiles(Paths.get(CLASSES_DIRECTORY + directoryName));
             throw new CompilationErrorException(e.getMessage());
         }
     }
 
-    private Class<?> findClass(String className, String directoryName) {
+    private Class<?> findClass(CompiletaClassLoaderComponent loaderComponent, String className, String directoryName) {
         return loaderComponent.findClass(className, directoryName);
+    }
+
+    public void deleteFiles(Path path) {
+        try {
+            FileSystemUtils.deleteRecursively(path);
+        } catch (IOException ioException) {
+            log.error(ioException.toString());
+        }
     }
 
 }

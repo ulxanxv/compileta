@@ -2,26 +2,19 @@ package ru.dexterity.compileta.util;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-import org.springframework.web.context.annotation.RequestScope;
+import ru.dexterity.compileta.api.CompileComponent;
 import ru.dexterity.compileta.api.domain.CompilationInfo;
 import ru.dexterity.compileta.exceptions.CompilationErrorException;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Objects;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 @Slf4j
-@Component
-@RequestScope
 public class CompiletaClassLoaderComponent extends ClassLoader {
-
-    @Value("${compile.storage-directory}")
-    private String classesDirectory;
 
     // Компиляция класса вместе с тестовым
     public void compileClasses(CompilationInfo compilationInfo, String directoryName) throws IOException {
@@ -49,57 +42,47 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
         }
     }
 
-    public void deleteFiles(File file) {
-        if (!file.exists()) { return; }
-
-        if (file.isDirectory()) {
-            Arrays.stream(Objects.requireNonNull(file.listFiles())).iterator().forEachRemaining(this::deleteFiles);
-        }
-
-        file.delete();
-    }
-
     private byte[] classToByteArray(String className, String directoryName) throws IOException {
         File compiledClass = new File(
-            classesDirectory + directoryName + className + ".class"
+            CompileComponent.CLASSES_DIRECTORY + directoryName + className + ".class"
         );
 
-        InputStream inputStream = new FileInputStream(compiledClass);
+        byte[] bytes;
 
-        long length = compiledClass.length();
+        try (InputStream inputStream = new FileInputStream(compiledClass)) {
+            long length = compiledClass.length();
 
-        if (length > Integer.MAX_VALUE) {
-            throw new CompilationErrorException(String.format("Класс %s очень большой", className));
+            if (length > Integer.MAX_VALUE) {
+                throw new CompilationErrorException(String.format("Класс %s очень большой", className));
+            }
+
+            bytes = new byte[(int) length];
+
+            int offset = 0;
+            int numRead = 0;
+            while (offset < bytes.length && (numRead = inputStream.read(bytes, offset, bytes.length - offset)) >= 0) {
+                offset += numRead;
+            }
+
+            if (offset < bytes.length) {
+                throw new CompilationErrorException(String.format("В класс %s не все байты прочитаны", className));
+            }
         }
 
-        byte[] bytes = new byte[(int) length];
-
-        int offset = 0;
-        int numRead = 0;
-        while (offset < bytes.length && (numRead = inputStream.read(bytes, offset, bytes.length - offset)) >= 0) {
-            offset += numRead;
-        }
-
-        if (offset < bytes.length) {
-            throw new CompilationErrorException(String.format("В класс %s не все байты прочитаны", className));
-        }
-
-        inputStream.close();
         return bytes;
     }
 
     private void createFile(String className, String directoryName, String code) throws IOException {
-        File directory = new File(classesDirectory + directoryName);
-        directory.mkdir();
-        File file = new File(classesDirectory + directoryName + className + ".java");
-        FileWriter fileWriter = new FileWriter(file);
-        fileWriter.write(code);
-        fileWriter.close();
+        if (Files.notExists(Paths.get(CompileComponent.CLASSES_DIRECTORY + directoryName))) {
+            Files.createDirectory(Paths.get(CompileComponent.CLASSES_DIRECTORY + directoryName));
+        }
+
+        Files.writeString(Paths.get(CompileComponent.CLASSES_DIRECTORY + directoryName + className + ".java"), code);
     }
 
     private void compileClasses(String className, String testClassName, String directoryName) throws IOException {
-        className       = classesDirectory + directoryName + className + ".java";
-        testClassName   = classesDirectory + directoryName + testClassName + ".java";
+        className       = CompileComponent.CLASSES_DIRECTORY + directoryName + className + ".java";
+        testClassName   = CompileComponent.CLASSES_DIRECTORY + directoryName + testClassName + ".java";
 
         Process process = Runtime.getRuntime().exec(
                 "javac -cp src/main/resources/module/junit.jar;src/main/resources/module/hamcrest.jar "
@@ -120,7 +103,7 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
     private void compileClass(String className, String directoryName) throws IOException {
         Process process = Runtime.getRuntime().exec(
             "javac -cp src/main/resources/module/junit.jar;src/main/resources/module/hamcrest.jar "
-            + classesDirectory + directoryName + className + ".java"
+            + CompileComponent.CLASSES_DIRECTORY + directoryName + className + ".java"
         );
 
         try {
