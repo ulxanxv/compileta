@@ -1,19 +1,24 @@
 package ru.dexterity.compileta.api;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.Getter;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import ru.dexterity.compileta.api.domain.CompilationInfo;
+import ru.dexterity.compileta.api.domain.CompileResponse;
+import ru.dexterity.compileta.api.domain.TaskOwner;
+import ru.dexterity.compileta.api.domain.UpdateTableResponse;
+import ru.dexterity.compileta.config.TaskOwnerKeyDeserializer;
 import ru.dexterity.compileta.exceptions.CompilationErrorException;
 
+import java.util.Map;
+
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 public class CompileController {
@@ -23,11 +28,9 @@ public class CompileController {
     @PostMapping("/compile")
     public ResponseEntity<CompileResponse> compile(@RequestBody CompilationInfo compilationInfo)  {
         try {
-            CompileResponse run = compileComponent.run(compilationInfo);
-            return ResponseEntity.ok(run);
+            return ResponseEntity.ok(compileComponent.run(compilationInfo));
         } catch (CompilationErrorException e) {
-            return ResponseEntity.ok(
-                CompileResponse.builder()
+            return ResponseEntity.ok(CompileResponse.builder()
                     .status("error")
                     .message(e.getMessage())
                     .build()
@@ -35,22 +38,9 @@ public class CompileController {
         }
     }
 
-    @Data
-    @Builder
-    public static class CompileResponse {
-
-        private String status;
-        private String message;
-
-        @JsonInclude(Include.NON_NULL)
-        private int brevity;
-
-        @JsonInclude(Include.NON_NULL)
-        private double rapidity;
-
-        @JsonInclude(Include.NON_NULL)
-        private double totalScore;
-
+    @PostMapping("/compile_all")
+    public ResponseEntity<UpdateTableResponse> compileAll(@RequestBody Map<TaskOwner, CompilationInfo> compilationList) {
+        return ResponseEntity.ok(compileComponent.runAll(compilationList));
     }
 
 }

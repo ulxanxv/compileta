@@ -6,8 +6,10 @@ import org.objectweb.asm.util.TraceClassVisitor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import ru.dexterity.compileta.api.CompileController.CompileResponse;
 import ru.dexterity.compileta.api.domain.CompilationInfo;
+import ru.dexterity.compileta.api.domain.CompileResponse;
+import ru.dexterity.compileta.api.domain.TaskOwner;
+import ru.dexterity.compileta.api.domain.UpdateTableResponse;
 import ru.dexterity.compileta.exceptions.CompilationErrorException;
 import ru.dexterity.compileta.util.CompiletaClassLoaderComponent;
 
@@ -19,7 +21,9 @@ import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -40,6 +44,20 @@ public class CompileComponent {
     private String classesDirectory;
 
 
+    public UpdateTableResponse runAll(Map<TaskOwner, CompilationInfo> compilationList) {
+        Map<TaskOwner, CompileResponse> responseMap = new HashMap<>();
+
+        compilationList.forEach((key, value) -> {
+            TaskOwner taskOwner = new TaskOwner();
+            taskOwner.setCredentialId(key.getCredentialId());
+            taskOwner.setTaskId(key.getTaskId());
+
+            responseMap.put(taskOwner, this.run(value));
+        });
+
+        return new UpdateTableResponse(responseMap);
+    }
+
     public CompileResponse run(CompilationInfo compilationInfo) {
         final String directoryName =
             UUID.randomUUID().toString().concat("/");
@@ -47,12 +65,12 @@ public class CompileComponent {
         // Компиляция основного класса и тестового
         this.compileClasses(compilationInfo, directoryName);
 
-        // Поиск скомпилированного класса и тестирование
-        Class<?> mainClass  = this.findClass(compilationInfo.getClassName(), directoryName); // TODO need to count brevity and resourceConsumption
+        // Загрузка скомпилированных классов
+        Class<?> mainClass  = this.findClass(compilationInfo.getClassName(), directoryName);
         Class<?> testClass  = this.findClass(compilationInfo.getTestClassName(), directoryName);
 
-        double averageSpeed = this.testSolution(testClass, directoryName);
-        int brevity         = this.countBrevity(compilationInfo.getClassName(), directoryName);
+        int userBrevity         = this.countBrevity(compilationInfo.getClassName(), directoryName);
+        double userAverageSpeed = this.testSolution(testClass, directoryName);
 
         loaderComponent.deleteFiles(
             new File(classesDirectory + directoryName)
@@ -60,11 +78,12 @@ public class CompileComponent {
 
         return CompileResponse.builder()
             .status("ok")
-            .message("tests passed")
-            .rapidity(averageSpeed)
-            .brevity(brevity)
-            // .totalScore() //FIXME
-            .build();
+            .message("Все тесты успешно пройдены")
+            .rapidity(userAverageSpeed)
+            .brevity(userBrevity)
+            .totalScore(
+                100 / (userAverageSpeed / compilationInfo.getAverageSpeed() + ((double) userBrevity / compilationInfo.getAverageBrevity()))
+            ).build();
     }
 
     private int countBrevity(String className, String directoryName) {
@@ -99,6 +118,7 @@ public class CompileComponent {
 
         try {
             Object testInstance = testClass.getConstructor().newInstance();
+
             for (Method method : declaredMethods) {
                 CompletableFuture.runAsync(() -> {
                     try {
@@ -111,20 +131,19 @@ public class CompileComponent {
                     }
                 }).get(10, TimeUnit.SECONDS);
             }
-
-            return executionSpeedEachMethod.stream()
-                .mapToDouble(Double::valueOf)
-                .average()
-                .orElse(Double.NaN);
-
         } catch (Exception e) {
             if (e instanceof TimeoutException)
-                throw new CompilationErrorException("защита от долгого выполнения (более 10 секунд)");
+                throw new CompilationErrorException("Защита от долгого выполнения (более 10 секунд)");
 
             loaderComponent.deleteFiles(new File(classesDirectory + directoryName));
             throw
                 new CompilationErrorException(e.getCause().getMessage());
         }
+
+        return executionSpeedEachMethod.stream()
+            .mapToDouble(Double::valueOf)
+            .average()
+            .orElse(Double.NaN);
     }
 
     private void compileClasses(CompilationInfo compilationInfo, String directoryName) {

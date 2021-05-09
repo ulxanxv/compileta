@@ -45,7 +45,7 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
             byte[] classByteCode = this.classToByteArray(className, directoryName);
             return this.defineClass(className, classByteCode, 0, classByteCode.length);
         } catch (IOException | ClassFormatError ignored) {
-            throw new CompilationErrorException(String.format("класс %s не найден", className));
+            throw new CompilationErrorException(String.format("Класс %s не найден", className));
         }
     }
 
@@ -69,7 +69,7 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
         long length = compiledClass.length();
 
         if (length > Integer.MAX_VALUE) {
-            throw new CompilationErrorException(String.format("класс %s очень большой", className));
+            throw new CompilationErrorException(String.format("Класс %s очень большой", className));
         }
 
         byte[] bytes = new byte[(int) length];
@@ -81,7 +81,7 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
         }
 
         if (offset < bytes.length) {
-            throw new CompilationErrorException(String.format("в класс %s не все байты прочитаны", className));
+            throw new CompilationErrorException(String.format("В класс %s не все байты прочитаны", className));
         }
 
         inputStream.close();
@@ -91,7 +91,6 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
     private void createFile(String className, String directoryName, String code) throws IOException {
         File directory = new File(classesDirectory + directoryName);
         directory.mkdir();
-
         File file = new File(classesDirectory + directoryName + className + ".java");
         FileWriter fileWriter = new FileWriter(file);
         fileWriter.write(code);
@@ -111,7 +110,7 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
             process.waitFor();
 
             if (process.exitValue() == 1) {
-                throw new CompilationErrorException("не удалось скомпилировать, проверьте синтаксис или название главного метода/класса");
+                throw new CompilationErrorException("Не удалось скомпилировать, проверьте синтаксис или название главного метода/класса");
             }
         } catch (InterruptedException e) { log.info(e.toString()); }
 
