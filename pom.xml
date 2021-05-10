@@ -6,13 +6,12 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>2.4.4</version>
+		<version>2.4.5</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 
 	<groupId>ru.dexterity</groupId>
 	<artifactId>compileta</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
 	<name>compileta</name>
 	<description>Microservice for compiling source code</description>
 
@@ -29,7 +28,6 @@
 		<dependency>
 			<groupId>org.springframework.data</groupId>
 			<artifactId>spring-data-commons</artifactId>
-			<version>2.4.6</version>
 		</dependency>
 
 		<dependency>
@@ -55,5 +53,15 @@
 		</dependency>
 
 	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+		<finalName>compileta</finalName>
+	</build>
 
 </project>

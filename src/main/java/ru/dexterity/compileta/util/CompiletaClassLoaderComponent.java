@@ -1,8 +1,7 @@
 package ru.dexterity.compileta.util;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import ru.dexterity.compileta.api.CompileComponent;
+import org.apache.tomcat.util.http.fileupload.IOUtils;
 import ru.dexterity.compileta.api.domain.CompilationInfo;
 import ru.dexterity.compileta.exceptions.CompilationErrorException;
 
@@ -16,19 +15,20 @@ import java.nio.file.Paths;
 @Slf4j
 public class CompiletaClassLoaderComponent extends ClassLoader {
 
+    private final String classesDirectory;
+    private final String modulesDirectory;
+
+    public CompiletaClassLoaderComponent(String classesDirectory, String modulesDirectory) {
+        this.classesDirectory = classesDirectory;
+        this.modulesDirectory = modulesDirectory;
+    }
+
     // Компиляция класса вместе с тестовым
     public void compileClasses(CompilationInfo compilationInfo, String directoryName) throws IOException {
         this.createFile(compilationInfo.getClassName(), directoryName, compilationInfo.getCode());
         this.createFile(compilationInfo.getTestClassName(), directoryName, compilationInfo.getTestCode());
 
         this.compileClasses(compilationInfo.getClassName(), compilationInfo.getTestClassName(), directoryName);
-    }
-
-    // Компиляция одного класса
-    public Class<?> compileClass(String className, String directoryName, String code) throws IOException {
-        this.createFile(className, directoryName, code);
-        this.compileClass(className, directoryName);
-        return findClass(className, directoryName);
     }
 
     @Override
@@ -44,7 +44,7 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
 
     private byte[] classToByteArray(String className, String directoryName) throws IOException {
         File compiledClass = new File(
-            CompileComponent.CLASSES_DIRECTORY + directoryName + className + ".class"
+            classesDirectory + directoryName + className + ".class"
         );
 
         byte[] bytes;
@@ -73,19 +73,21 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
     }
 
     private void createFile(String className, String directoryName, String code) throws IOException {
-        if (Files.notExists(Paths.get(CompileComponent.CLASSES_DIRECTORY + directoryName))) {
-            Files.createDirectory(Paths.get(CompileComponent.CLASSES_DIRECTORY + directoryName));
+        if (Files.notExists(Paths.get(classesDirectory + directoryName))) {
+            Files.createDirectory(Paths.get(classesDirectory + directoryName));
         }
 
-        Files.writeString(Paths.get(CompileComponent.CLASSES_DIRECTORY + directoryName + className + ".java"), code);
+        Files.writeString(Paths.get(classesDirectory + directoryName + className + ".java"), code);
     }
 
     private void compileClasses(String className, String testClassName, String directoryName) throws IOException {
-        className       = CompileComponent.CLASSES_DIRECTORY + directoryName + className + ".java";
-        testClassName   = CompileComponent.CLASSES_DIRECTORY + directoryName + testClassName + ".java";
+        className       = classesDirectory + directoryName + className + ".java";
+        testClassName   = classesDirectory + directoryName + testClassName + ".java";
+
+        log.info("javac -cp " + modulesDirectory + "junit.jar;" + modulesDirectory + "hamcrest.jar ");
 
         Process process = Runtime.getRuntime().exec(
-                "javac -cp src/main/resources/module/junit.jar;src/main/resources/module/hamcrest.jar "
+                "javac -cp " + modulesDirectory + "junit.jar;" + modulesDirectory + "hamcrest.jar "
                 + className + " " + testClassName
         );
 
@@ -93,26 +95,19 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
             process.waitFor();
 
             if (process.exitValue() == 1) {
+
+                IOUtils.closeQuietly(process.getInputStream());
+                IOUtils.closeQuietly(process.getOutputStream());
+                IOUtils.closeQuietly(process.getErrorStream());
+
                 throw new CompilationErrorException("Не удалось скомпилировать, проверьте синтаксис или название главного метода/класса");
             }
         } catch (InterruptedException e) { log.info(e.toString()); }
 
-        process.destroy();
-    }
+        IOUtils.closeQuietly(process.getInputStream());
+        IOUtils.closeQuietly(process.getOutputStream());
+        IOUtils.closeQuietly(process.getErrorStream());
 
-    private void compileClass(String className, String directoryName) throws IOException {
-        Process process = Runtime.getRuntime().exec(
-            "javac -cp src/main/resources/module/junit.jar;src/main/resources/module/hamcrest.jar "
-            + CompileComponent.CLASSES_DIRECTORY + directoryName + className + ".java"
-        );
-
-        try {
-            process.waitFor();
-        } catch (InterruptedException e) {
-            log.info(e.toString());
-        }
-
-        process.destroy();
     }
 
 }

@@ -37,7 +37,11 @@ import java.util.concurrent.TimeoutException;
 @Component
 public class CompileComponent {
 
-    public static final String CLASSES_DIRECTORY = "src/main/resources/classes/";
+    @Value("${compile.classesDirectory}")
+    public String classesDirectory;
+
+    @Value("${compile.modulesDirectory}")
+    public String modulesDirectory;
 
     public UpdateTableResponse runAll(Map<TaskOwner, CompilationInfo> compilationList) {
         Map<TaskOwner, CompileResponse> responseMap = new HashMap<>();
@@ -58,7 +62,7 @@ public class CompileComponent {
             UUID.randomUUID().toString().concat("/");
 
         final CompiletaClassLoaderComponent loaderComponent =
-            new CompiletaClassLoaderComponent();
+            new CompiletaClassLoaderComponent(classesDirectory, modulesDirectory);
 
         // Компиляция основного класса и тестового
         this.compileClasses(loaderComponent, compilationInfo, directoryName);
@@ -71,7 +75,7 @@ public class CompileComponent {
         double userAverageSpeed = this.testSolution(testClass, directoryName);
 
         System.gc();
-        this.deleteFiles(Paths.get(CLASSES_DIRECTORY + directoryName));
+        this.deleteFiles(Paths.get(classesDirectory + directoryName));
 
         return CompileResponse.builder()
             .status("ok")
@@ -88,7 +92,7 @@ public class CompileComponent {
 
         try {
             classReader = new ClassReader(
-                new FileInputStream(CLASSES_DIRECTORY + directoryName + className + ".class")
+                new FileInputStream(classesDirectory + directoryName + className + ".class")
             );
         } catch (IOException ignored) {
             return 0;
@@ -130,12 +134,12 @@ public class CompileComponent {
             }
         } catch (Exception e) {
             if (e instanceof TimeoutException) {
-                this.deleteFiles(Paths.get(CLASSES_DIRECTORY + directoryName));
+                this.deleteFiles(Paths.get(classesDirectory + directoryName));
                 throw
                     new CompilationErrorException("Защита от долгого выполнения (более 10 секунд)");
             }
 
-            this.deleteFiles(Paths.get(CLASSES_DIRECTORY + directoryName));
+            this.deleteFiles(Paths.get(classesDirectory + directoryName));
             throw
                 new CompilationErrorException(e.getCause().getMessage());
         }
@@ -150,7 +154,7 @@ public class CompileComponent {
         try {
             loaderComponent.compileClasses(compilationInfo, directoryName);
         } catch (IOException | CompilationErrorException e) {
-            this.deleteFiles(Paths.get(CLASSES_DIRECTORY + directoryName));
+            this.deleteFiles(Paths.get(classesDirectory + directoryName));
             throw new CompilationErrorException(e.getMessage());
         }
     }

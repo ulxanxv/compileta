@@ -4,3 +4,7 @@ server:
   error:
     whitelabel:
       enabled: false
+
+compile:
+  classesDirectory: src/main/resources/classes/
+  modulesDirectory: modules/
