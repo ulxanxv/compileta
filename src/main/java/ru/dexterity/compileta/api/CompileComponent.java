@@ -3,11 +3,8 @@ package ru.dexterity.compileta.api;
 import lombok.extern.slf4j.Slf4j;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.util.TraceClassVisitor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.util.FileSystemUtils;
 import ru.dexterity.compileta.api.domain.CompilationInfo;
 import ru.dexterity.compileta.api.domain.CompileResponse;
 import ru.dexterity.compileta.api.domain.TaskOwner;
@@ -15,7 +12,6 @@ import ru.dexterity.compileta.api.domain.UpdateTableResponse;
 import ru.dexterity.compileta.exceptions.CompilationErrorException;
 import ru.dexterity.compileta.util.CompiletaClassLoaderComponent;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -68,13 +64,18 @@ public class CompileComponent {
         this.compileClasses(loaderComponent, compilationInfo, directoryName);
 
         // Загрузка скомпилированных классов
+        try {
+            Class<?> jUnit      = loaderComponent.loadClass("org.junit.Assert");
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+
         Class<?> mainClass  = this.findClass(loaderComponent, compilationInfo.getClassName(), directoryName);
         Class<?> testClass  = this.findClass(loaderComponent, compilationInfo.getTestClassName(), directoryName);
 
         int userBrevity         = this.countBrevity(compilationInfo.getClassName(), directoryName);
         double userAverageSpeed = this.testSolution(testClass, directoryName);
 
-        System.gc();
         this.deleteFiles(Paths.get(classesDirectory + directoryName));
 
         return CompileResponse.builder()
@@ -124,7 +125,6 @@ public class CompileComponent {
                 CompletableFuture.runAsync(() -> {
                     try {
                         long executionSpeed = System.nanoTime();
-
                         method.invoke(testInstance);
                         executionSpeedEachMethod.add(System.nanoTime() - executionSpeed);
                     } catch (IllegalAccessException | InvocationTargetException e) {
@@ -164,11 +164,11 @@ public class CompileComponent {
     }
 
     public void deleteFiles(Path path) {
-        try {
-            FileSystemUtils.deleteRecursively(path);
-        } catch (IOException ioException) {
-            log.error(ioException.toString());
-        }
+        // try {
+        //     FileSystemUtils.deleteRecursively(path);
+        // } catch (IOException ioException) {
+        //     log.error(ioException.toString());
+        // }
     }
 
 }

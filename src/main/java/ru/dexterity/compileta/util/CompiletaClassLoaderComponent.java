@@ -1,22 +1,25 @@
 package ru.dexterity.compileta.util;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.tomcat.util.http.fileupload.IOUtils;
 import ru.dexterity.compileta.api.domain.CompilationInfo;
 import ru.dexterity.compileta.exceptions.CompilationErrorException;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class CompiletaClassLoaderComponent extends ClassLoader {
 
     private final String classesDirectory;
-    private final String modulesDirectory;
+    private String modulesDirectory;
 
     public CompiletaClassLoaderComponent(String classesDirectory, String modulesDirectory) {
         this.classesDirectory = classesDirectory;
@@ -84,10 +87,8 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
         className       = classesDirectory + directoryName + className + ".java";
         testClassName   = classesDirectory + directoryName + testClassName + ".java";
 
-        log.info("javac -cp " + modulesDirectory + "junit.jar;" + modulesDirectory + "hamcrest.jar ");
-
         Process process = Runtime.getRuntime().exec(
-                "javac -cp " + modulesDirectory + "junit.jar;" + modulesDirectory + "hamcrest.jar "
+                "javac -cp " + modulesDirectory + "junit.jar" + File.pathSeparatorChar + modulesDirectory + "hamcrest.jar "
                 + className + " " + testClassName
         );
 
@@ -95,19 +96,21 @@ public class CompiletaClassLoaderComponent extends ClassLoader {
             process.waitFor();
 
             if (process.exitValue() == 1) {
+                String errorText = new BufferedReader(
+                    new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))
+                    .lines()
+                    .collect(Collectors.joining("\n"));
 
-                IOUtils.closeQuietly(process.getInputStream());
-                IOUtils.closeQuietly(process.getOutputStream());
-                IOUtils.closeQuietly(process.getErrorStream());
+                log.info("Compile error :: {}", errorText);
 
                 throw new CompilationErrorException("Не удалось скомпилировать, проверьте синтаксис или название главного метода/класса");
             }
-        } catch (InterruptedException e) { log.info(e.toString()); }
-
-        IOUtils.closeQuietly(process.getInputStream());
-        IOUtils.closeQuietly(process.getOutputStream());
-        IOUtils.closeQuietly(process.getErrorStream());
-
+        } catch (InterruptedException e) {
+            log.error(e.getMessage());
+        } finally {
+            process.destroy();
+            process.destroyForcibly();
+        }
     }
 
 }
