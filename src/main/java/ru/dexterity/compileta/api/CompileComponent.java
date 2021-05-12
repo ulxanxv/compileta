@@ -1,23 +1,33 @@
 package ru.dexterity.compileta.api;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.util.TraceClassVisitor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.util.FileSystemUtils;
 import ru.dexterity.compileta.api.domain.CompilationInfo;
 import ru.dexterity.compileta.api.domain.CompileResponse;
 import ru.dexterity.compileta.api.domain.TaskOwner;
 import ru.dexterity.compileta.api.domain.UpdateTableResponse;
 import ru.dexterity.compileta.exceptions.CompilationErrorException;
-import ru.dexterity.compileta.util.CompiletaClassLoaderComponent;
 
+import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -28,9 +38,11 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class CompileComponent {
 
     @Value("${compile.classesDirectory}")
@@ -38,6 +50,8 @@ public class CompileComponent {
 
     @Value("${compile.modulesDirectory}")
     public String modulesDirectory;
+
+    private final FilesNeedDeleted needDeleted;
 
     public UpdateTableResponse runAll(Map<TaskOwner, CompilationInfo> compilationList) {
         Map<TaskOwner, CompileResponse> responseMap = new HashMap<>();
@@ -57,21 +71,34 @@ public class CompileComponent {
         final String directoryName =
             UUID.randomUUID().toString().concat("/");
 
-        final CompiletaClassLoaderComponent loaderComponent =
-            new CompiletaClassLoaderComponent(classesDirectory, modulesDirectory);
-
         // Компиляция основного класса и тестового
-        this.compileClasses(loaderComponent, compilationInfo, directoryName);
-
-        // Загрузка скомпилированных классов
         try {
-            Class<?> jUnit      = loaderComponent.loadClass("org.junit.Assert");
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
+            this.compileClasses(compilationInfo, directoryName);
+        } catch (CompilationErrorException exception) {
+            this.deleteFiles(Paths.get(classesDirectory + directoryName));
+            throw exception;
         }
 
-        Class<?> mainClass  = this.findClass(loaderComponent, compilationInfo.getClassName(), directoryName);
-        Class<?> testClass  = this.findClass(loaderComponent, compilationInfo.getTestClassName(), directoryName);
+        // Загрузка скомпилированных классов
+        Class<?> testClass = null;
+
+        try {
+
+            URL[] urls = new URL[] {
+                new File(modulesDirectory + "junit.jar").toURI().toURL(),
+                new File(classesDirectory + directoryName).toURI().toURL()
+            };
+
+            URLClassLoader urlClassLoader = URLClassLoader.newInstance(urls);
+
+            try {
+                testClass  = urlClassLoader.loadClass(compilationInfo.getTestClassName());
+            } catch (ClassNotFoundException e) {
+                log.error(e.getMessage());
+            }
+        } catch (MalformedURLException e) {
+            log.error(e.getMessage());
+        }
 
         int userBrevity         = this.countBrevity(compilationInfo.getClassName(), directoryName);
         double userAverageSpeed = this.testSolution(testClass, directoryName);
@@ -150,25 +177,62 @@ public class CompileComponent {
             .orElse(Double.NaN);
     }
 
-    private void compileClasses(CompiletaClassLoaderComponent loaderComponent, CompilationInfo compilationInfo, String directoryName) {
+    private void compileClasses(CompilationInfo compilationInfo, String directoryName) {
         try {
-            loaderComponent.compileClasses(compilationInfo, directoryName);
-        } catch (IOException | CompilationErrorException e) {
-            this.deleteFiles(Paths.get(classesDirectory + directoryName));
-            throw new CompilationErrorException(e.getMessage());
+            this.createFile(compilationInfo.getClassName(), directoryName, compilationInfo.getCode());
+            this.createFile(compilationInfo.getTestClassName(), directoryName, compilationInfo.getTestCode());
+        } catch (IOException ioException) {
+            throw new CompilationErrorException(ioException.getMessage());
+        }
+
+        this.compileClasses(compilationInfo.getClassName(), compilationInfo.getTestClassName(), directoryName);
+    }
+
+    private void compileClasses(String className, String testClassName, String directoryName) {
+        className       = classesDirectory + directoryName + className + ".java";
+        testClassName   = classesDirectory + directoryName + testClassName + ".java";
+
+        try {
+            Process process = Runtime.getRuntime().exec(
+                "javac -Xmaxerrs 1 -cp " + modulesDirectory + "junit.jar" + File.pathSeparatorChar + modulesDirectory + "hamcrest.jar "
+                    + className + " " + testClassName
+            );
+            process.waitFor();
+
+            if (process.exitValue() == 1) {
+                String errorText = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))
+                    .lines()
+                    .collect(Collectors.joining("\n"));
+
+                throw new CompilationErrorException(errorText);
+            }
+
+        } catch (InterruptedException | IOException e) {
+            log.error(e.getMessage());
         }
     }
 
-    private Class<?> findClass(CompiletaClassLoaderComponent loaderComponent, String className, String directoryName) {
-        return loaderComponent.findClass(className, directoryName);
+    private void createFile(String className, String directoryName, String code) throws IOException {
+        if (Files.notExists(Paths.get(classesDirectory + directoryName))) {
+            Files.createDirectory(Paths.get(classesDirectory + directoryName));
+        }
+
+        Files.write(Paths.get(classesDirectory + directoryName + className + ".java"), code.getBytes(StandardCharsets.UTF_8));
     }
 
     public void deleteFiles(Path path) {
-        // try {
-        //     FileSystemUtils.deleteRecursively(path);
-        // } catch (IOException ioException) {
-        //     log.error(ioException.toString());
-        // }
+        needDeleted.addFile(path);
+    }
+
+    @Scheduled(cron = "0/15 * * * * *")
+    public void deleteFiles() {
+        needDeleted.getNeedDeleted().removeIf(each -> {
+            try {
+                return FileSystemUtils.deleteRecursively(each);
+            } catch (IOException ioException) {
+                return false;
+            }
+        });
     }
 
 }

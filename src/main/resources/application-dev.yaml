@@ -7,4 +7,4 @@ server:
 
 compile:
   classesDirectory: src/main/resources/classes/
-  modulesDirectory: modules/
+  modulesDirectory: src/main/resources/modules/
