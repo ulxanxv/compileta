@@ -51,8 +51,6 @@ public class CompileComponent {
     @Value("${compile.modulesDirectory}")
     public String modulesDirectory;
 
-    private final FilesNeedDeleted needDeleted;
-
     public UpdateTableResponse runAll(Map<TaskOwner, CompilationInfo> compilationList) {
         Map<TaskOwner, CompileResponse> responseMap = new HashMap<>();
 
@@ -72,12 +70,7 @@ public class CompileComponent {
             UUID.randomUUID().toString().concat("/");
 
         // Компиляция основного класса и тестового
-        try {
-            this.compileClasses(compilationInfo, directoryName);
-        } catch (CompilationErrorException exception) {
-            this.deleteFiles(Paths.get(classesDirectory + directoryName));
-            throw exception;
-        }
+        this.compileClasses(compilationInfo, directoryName);
 
         // Загрузка скомпилированных классов
         Class<?> testClass = null;
@@ -102,8 +95,6 @@ public class CompileComponent {
 
         int userBrevity         = this.countBrevity(compilationInfo.getClassName(), directoryName);
         double userAverageSpeed = this.testSolution(testClass, directoryName);
-
-        this.deleteFiles(Paths.get(classesDirectory + directoryName));
 
         return CompileResponse.builder()
             .status("ok")
@@ -161,14 +152,10 @@ public class CompileComponent {
             }
         } catch (Exception e) {
             if (e instanceof TimeoutException) {
-                this.deleteFiles(Paths.get(classesDirectory + directoryName));
-                throw
-                    new CompilationErrorException("Защита от долгого выполнения (более 10 секунд)");
+                throw new CompilationErrorException("Защита от долгого выполнения (более 10 секунд)");
             }
 
-            this.deleteFiles(Paths.get(classesDirectory + directoryName));
-            throw
-                new CompilationErrorException(e.getCause().getMessage());
+            throw new CompilationErrorException(e.getCause().getMessage());
         }
 
         return executionSpeedEachMethod.stream()
@@ -220,19 +207,18 @@ public class CompileComponent {
         Files.write(Paths.get(classesDirectory + directoryName + className + ".java"), code.getBytes(StandardCharsets.UTF_8));
     }
 
-    public void deleteFiles(Path path) {
-        needDeleted.addFile(path);
-    }
-
-    @Scheduled(cron = "0/15 * * * * *")
+    @Scheduled(cron = "0/10 * * * * *")
     public void deleteFiles() {
-        needDeleted.getNeedDeleted().removeIf(each -> {
+        if (!Files.exists(Paths.get(classesDirectory))) {
+            return;
+        }
+
+        File[] files = new File(classesDirectory).listFiles();
+        for (File file : files) {
             try {
-                return FileSystemUtils.deleteRecursively(each);
-            } catch (IOException ioException) {
-                return false;
-            }
-        });
+                FileSystemUtils.deleteRecursively(file.toPath());
+            } catch (IOException ignored) {}
+        }
     }
 
 }
