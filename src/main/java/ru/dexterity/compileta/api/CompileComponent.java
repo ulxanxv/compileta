@@ -25,6 +25,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -145,7 +146,7 @@ public class CompileComponent {
             Object testInstance = testClass.getConstructor().newInstance();
 
             for (Method method : declaredMethods) {
-                if (!method.isAnnotationPresent(Test.class)) { continue; }
+                if (Modifier.isPrivate(method.getModifiers())) { continue; }
                 CompletableFuture.runAsync(() -> {
                     try {
                         long executionSpeed = System.nanoTime();
