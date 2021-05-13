@@ -2,6 +2,7 @@ package ru.dexterity.compileta.api;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.junit.Test;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.util.TraceClassVisitor;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,6 +15,7 @@ import ru.dexterity.compileta.api.domain.TaskOwner;
 import ru.dexterity.compileta.api.domain.UpdateTableResponse;
 import ru.dexterity.compileta.exceptions.CompilationErrorException;
 
+import javax.annotation.PostConstruct;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -28,7 +30,6 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,6 +51,8 @@ public class CompileComponent {
 
     @Value("${compile.modulesDirectory}")
     public String modulesDirectory;
+
+    private final FilesToDeleted needDeleted;
 
     public UpdateTableResponse runAll(Map<TaskOwner, CompilationInfo> compilationList) {
         Map<TaskOwner, CompileResponse> responseMap = new HashMap<>();
@@ -87,9 +90,11 @@ public class CompileComponent {
             try {
                 testClass  = urlClassLoader.loadClass(compilationInfo.getTestClassName());
             } catch (ClassNotFoundException e) {
+                needDeleted.add(Paths.get(classesDirectory + directoryName));
                 log.error(e.getMessage());
             }
         } catch (MalformedURLException e) {
+            needDeleted.add(Paths.get(classesDirectory + directoryName));
             log.error(e.getMessage());
         }
 
@@ -140,12 +145,14 @@ public class CompileComponent {
             Object testInstance = testClass.getConstructor().newInstance();
 
             for (Method method : declaredMethods) {
+                if (!method.isAnnotationPresent(Test.class)) { continue; }
                 CompletableFuture.runAsync(() -> {
                     try {
                         long executionSpeed = System.nanoTime();
                         method.invoke(testInstance);
                         executionSpeedEachMethod.add(System.nanoTime() - executionSpeed);
                     } catch (IllegalAccessException | InvocationTargetException e) {
+                        needDeleted.add(Paths.get(classesDirectory + directoryName));
                         throw new CompilationErrorException(e.getCause().getMessage());
                     }
                 }).get(10, TimeUnit.SECONDS);
@@ -156,6 +163,8 @@ public class CompileComponent {
             }
 
             throw new CompilationErrorException(e.getCause().getMessage());
+        } finally {
+            needDeleted.add(Paths.get(classesDirectory + directoryName));
         }
 
         return executionSpeedEachMethod.stream()
@@ -169,6 +178,7 @@ public class CompileComponent {
             this.createFile(compilationInfo.getClassName(), directoryName, compilationInfo.getCode());
             this.createFile(compilationInfo.getTestClassName(), directoryName, compilationInfo.getTestCode());
         } catch (IOException ioException) {
+            needDeleted.add(Paths.get(classesDirectory + directoryName));
             throw new CompilationErrorException(ioException.getMessage());
         }
 
@@ -191,11 +201,13 @@ public class CompileComponent {
                     .lines()
                     .collect(Collectors.joining("\n"));
 
+                needDeleted.add(Paths.get(classesDirectory + directoryName));
+
                 throw new CompilationErrorException(errorText);
             }
 
-        } catch (InterruptedException | IOException e) {
-            log.error(e.getMessage());
+        } catch (InterruptedException | IOException ignored) {
+            needDeleted.add(Paths.get(classesDirectory + directoryName));
         }
     }
 
@@ -213,12 +225,26 @@ public class CompileComponent {
             return;
         }
 
-        File[] files = new File(classesDirectory).listFiles();
-        for (File file : files) {
+        needDeleted.getNeedDeleted().removeIf(each -> {
             try {
-                FileSystemUtils.deleteRecursively(file.toPath());
-            } catch (IOException ignored) {}
+                return FileSystemUtils.deleteRecursively(each);
+            } catch (IOException ignored) {
+                return false;
+            }
+        });
+    }
+
+    @PostConstruct
+    public void clearClasses() {
+        if (!Files.exists(Paths.get(classesDirectory))) {
+            return;
         }
+
+        File[] listFiles = new File(classesDirectory).listFiles();
+        for (File file : listFiles) {
+            needDeleted.add(file.toPath());
+        }
+
     }
 
 }
