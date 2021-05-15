@@ -2,14 +2,13 @@ package ru.dexterity.compileta.api;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Test;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.util.TraceClassVisitor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.FileSystemUtils;
-import ru.dexterity.compileta.api.domain.CompilationInfo;
+import ru.dexterity.compileta.api.domain.CompileRequest;
 import ru.dexterity.compileta.api.domain.CompileResponse;
 import ru.dexterity.compileta.api.domain.TaskOwner;
 import ru.dexterity.compileta.api.domain.UpdateTableResponse;
@@ -53,12 +52,12 @@ public class CompileComponent {
     @Value("${compile.modulesDirectory}")
     public String modulesDirectory;
 
-    private final FilesToDeleted needDeleted;
+    private final DeleteQueue deleteQueue;
 
-    public UpdateTableResponse runAll(Map<TaskOwner, CompilationInfo> compilationList) {
+    public UpdateTableResponse runAll(Map<TaskOwner, CompileRequest> compileMap) {
         Map<TaskOwner, CompileResponse> responseMap = new HashMap<>();
 
-        compilationList.forEach((key, value) -> {
+        compileMap.forEach((key, value) -> {
             TaskOwner taskOwner = new TaskOwner();
             taskOwner.setCredentialId(key.getCredentialId());
             taskOwner.setTaskId(key.getTaskId());
@@ -69,12 +68,12 @@ public class CompileComponent {
         return new UpdateTableResponse(responseMap);
     }
 
-    public CompileResponse run(CompilationInfo compilationInfo) {
+    public CompileResponse run(CompileRequest compileRequest) {
         final String directoryName =
             UUID.randomUUID().toString().concat("/");
 
         // Компиляция основного класса и тестового
-        this.compileClasses(compilationInfo, directoryName);
+        this.compileClasses(compileRequest, directoryName);
 
         // Загрузка скомпилированных классов
         Class<?> testClass = null;
@@ -89,17 +88,17 @@ public class CompileComponent {
             URLClassLoader urlClassLoader = URLClassLoader.newInstance(urls);
 
             try {
-                testClass  = urlClassLoader.loadClass(compilationInfo.getTestClassName());
+                testClass  = urlClassLoader.loadClass(compileRequest.getTestClassName());
             } catch (ClassNotFoundException e) {
-                needDeleted.add(Paths.get(classesDirectory + directoryName));
+                deleteQueue.add(Paths.get(classesDirectory + directoryName));
                 log.error(e.getMessage());
             }
         } catch (MalformedURLException e) {
-            needDeleted.add(Paths.get(classesDirectory + directoryName));
+            deleteQueue.add(Paths.get(classesDirectory + directoryName));
             log.error(e.getMessage());
         }
 
-        int userBrevity         = this.countBrevity(compilationInfo.getClassName(), directoryName);
+        int userBrevity         = this.countBrevity(compileRequest.getClassName(), directoryName);
         double userAverageSpeed = this.testSolution(testClass, directoryName);
 
         return CompileResponse.builder()
@@ -108,7 +107,7 @@ public class CompileComponent {
             .rapidity(userAverageSpeed)
             .brevity(userBrevity)
             .totalScore(
-                100 / (userAverageSpeed / compilationInfo.getAverageSpeed() + ((double) userBrevity / compilationInfo.getAverageBrevity()))
+                100 / (userAverageSpeed / compileRequest.getAverageSpeed() + ((double) userBrevity / compileRequest.getAverageBrevity()))
             ).build();
     }
 
@@ -153,7 +152,7 @@ public class CompileComponent {
                         method.invoke(testInstance);
                         executionSpeedEachMethod.add(System.nanoTime() - executionSpeed);
                     } catch (IllegalAccessException | InvocationTargetException e) {
-                        needDeleted.add(Paths.get(classesDirectory + directoryName));
+                        deleteQueue.add(Paths.get(classesDirectory + directoryName));
                         throw new CompilationErrorException(e.getCause().getMessage());
                     }
                 }).get(10, TimeUnit.SECONDS);
@@ -165,7 +164,7 @@ public class CompileComponent {
 
             throw new CompilationErrorException(e.getCause().getMessage());
         } finally {
-            needDeleted.add(Paths.get(classesDirectory + directoryName));
+            deleteQueue.add(Paths.get(classesDirectory + directoryName));
         }
 
         return executionSpeedEachMethod.stream()
@@ -174,16 +173,16 @@ public class CompileComponent {
             .orElse(Double.NaN);
     }
 
-    private void compileClasses(CompilationInfo compilationInfo, String directoryName) {
+    private void compileClasses(CompileRequest compileRequest, String directoryName) {
         try {
-            this.createFile(compilationInfo.getClassName(), directoryName, compilationInfo.getCode());
-            this.createFile(compilationInfo.getTestClassName(), directoryName, compilationInfo.getTestCode());
+            this.createFile(compileRequest.getClassName(), directoryName, compileRequest.getCode());
+            this.createFile(compileRequest.getTestClassName(), directoryName, compileRequest.getTestCode());
         } catch (IOException ioException) {
-            needDeleted.add(Paths.get(classesDirectory + directoryName));
+            deleteQueue.add(Paths.get(classesDirectory + directoryName));
             throw new CompilationErrorException(ioException.getMessage());
         }
 
-        this.compileClasses(compilationInfo.getClassName(), compilationInfo.getTestClassName(), directoryName);
+        this.compileClasses(compileRequest.getClassName(), compileRequest.getTestClassName(), directoryName);
     }
 
     private void compileClasses(String className, String testClassName, String directoryName) {
@@ -202,13 +201,13 @@ public class CompileComponent {
                     .lines()
                     .collect(Collectors.joining("\n"));
 
-                needDeleted.add(Paths.get(classesDirectory + directoryName));
+                deleteQueue.add(Paths.get(classesDirectory + directoryName));
 
                 throw new CompilationErrorException(errorText);
             }
 
         } catch (InterruptedException | IOException ignored) {
-            needDeleted.add(Paths.get(classesDirectory + directoryName));
+            deleteQueue.add(Paths.get(classesDirectory + directoryName));
         }
     }
 
@@ -220,19 +219,21 @@ public class CompileComponent {
         Files.write(Paths.get(classesDirectory + directoryName + className + ".java"), code.getBytes(StandardCharsets.UTF_8));
     }
 
-    @Scheduled(cron = "0/10 * * * * *")
+    @Scheduled(cron = "0/60 * * * * *")
     public void deleteFiles() {
         if (!Files.exists(Paths.get(classesDirectory))) {
             return;
         }
 
-        needDeleted.getNeedDeleted().removeIf(each -> {
-            try {
-                return FileSystemUtils.deleteRecursively(each);
-            } catch (IOException ignored) {
-                return false;
-            }
-        });
+        synchronized (this) {
+            deleteQueue.getNeedDeleted().removeIf(each -> {
+                try {
+                    return FileSystemUtils.deleteRecursively(each);
+                } catch (IOException ignored) {
+                    return false;
+                }
+            });
+        }
     }
 
     @PostConstruct
@@ -243,7 +244,7 @@ public class CompileComponent {
 
         File[] listFiles = new File(classesDirectory).listFiles();
         for (File file : listFiles) {
-            needDeleted.add(file.toPath());
+            deleteQueue.add(file.toPath());
         }
 
     }

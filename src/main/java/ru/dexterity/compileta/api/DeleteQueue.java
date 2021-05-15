@@ -11,16 +11,12 @@ import java.util.List;
 @Getter
 @Component
 @Scope("singleton")
-public class FilesToDeleted {
+public class DeleteQueue {
 
     private final List<Path> needDeleted = new ArrayList<>();
 
-    public void add(Path path) {
+    public synchronized void add(Path path) {
         needDeleted.add(path);
-    }
-
-    public void remove(Path path) {
-        needDeleted.remove(path);
     }
 
 }
