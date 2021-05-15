@@ -107,7 +107,7 @@ public class CompileComponent {
             .rapidity(userAverageSpeed)
             .brevity(userBrevity)
             .totalScore(
-                100 / (userAverageSpeed / compileRequest.getAverageSpeed() + ((double) userBrevity / compileRequest.getAverageBrevity()))
+                50 / (userAverageSpeed / compileRequest.getAverageSpeed()) + ((double) (50 / (userBrevity / compileRequest.getAverageBrevity())))
             ).build();
     }
 
