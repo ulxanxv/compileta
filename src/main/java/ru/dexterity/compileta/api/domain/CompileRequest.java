@@ -3,7 +3,7 @@ package ru.dexterity.compileta.api.domain;
 import lombok.Data;
 
 @Data
-public class CompilationInfo {
+public class CompileRequest {
 
     private String code;
     private String className;

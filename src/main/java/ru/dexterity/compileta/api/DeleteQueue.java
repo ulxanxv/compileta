@@ -11,7 +11,7 @@ import java.util.List;
 @Getter
 @Component
 @Scope("singleton")
-public class FilesToDeleted {
+public class DeleteQueue {
 
     private final List<Path> needDeleted = new ArrayList<>();
 
